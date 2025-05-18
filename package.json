@@ -1,5 +1,6 @@
 {
   "type": "module",
   "dependencies": {
+    "inquirer": "^12.6.1"
   }
 }

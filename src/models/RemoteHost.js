@@ -52,6 +52,7 @@ export default class RemoteHost {
     }
 
     save() {
+        this.delete()
         this.updated_at = new Date();
         RemoteHost.db.save(this);
     }
