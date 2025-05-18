@@ -1,5 +1,6 @@
 import inquirer from "inquirer";
 import RemoteHost from "../models/RemoteHost.js";
+import chalk from "chalk";
 
 export class RsyncCommand {
     /** @type {boolean} */
@@ -10,7 +11,6 @@ export class RsyncCommand {
 
     async askPrompts() {
         await this.askPrompts__getRemoteHost();
-        await this.askPrompts__selectRootPath();
         await this.askPrompts__handleRemoteHost();
     }
 
@@ -19,19 +19,19 @@ export class RsyncCommand {
 
         const choice = (await inquirer.prompt([
             {
-                type: 'list',
+                type: 'rawlist',
                 name: 'choice',
                 message: 'What do you want to do?',
                 choices: [
-                    {name: `Pull from ${remoteName}`, value: 'pull'},
-                    {name: `Push to ${remoteName}`, value: 'push'},
+                    {name: `Pull from remote host`, value: 'pull'},
+                    {name: `Push to remote host`, value: 'push'},
                     new inquirer.Separator(),
-                    {name: `Start ${remoteName} connection`, value: 'startConnection'},
-                    {name: `Test connection to ${remoteName}`, value: 'testConnection'},
+                    {name: `Start remote host connection`, value: 'startConnection'},
+                    {name: `Test connection to remote host`, value: 'testConnection'},
                     new inquirer.Separator(),
-                    {name: `See ${remoteName} details`, value: 'details'},
-                    {name: `Edit ${remoteName} details`, value: 'edit'},
-                    {name: `Delete ${remoteName}`, value: 'delete'},
+                    {name: `See remote host details`, value: 'details'},
+                    {name: `Edit remote host details`, value: 'edit'},
+                    {name: `Delete remote host`, value: 'delete'},
                 ],
             },
         ])).choice;
@@ -45,6 +45,7 @@ export class RsyncCommand {
                 break;
             case 'details':
                 this.showRemoteHostDetails();
+                await this.pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
                 break;
             case 'edit':
@@ -64,6 +65,7 @@ export class RsyncCommand {
                     await this.remoteHost.delete();
                     console.log(`Remote remoteHost ${this.remoteHost.name} deleted!`);
                     this.showRemoteHostDetails();
+                    await this.pressEnterToContinue();
                     return;
                 } else {
                     await this.askPrompts__handleRemoteHost();
@@ -71,12 +73,22 @@ export class RsyncCommand {
 
                 break;
             case 'startConnection':
-                await this.remoteHost.sshConnect()
-                console.log(`Connection to ${remoteName} finished!`);
+                if (!this.remoteHost) {
+                    console.log(chalk.bold.red('No remote host selected!'));
+                } else {
+                    await this.remoteHost.sshConnect()
+                    console.log(chalk.bold(`Connection to ${remoteName} finished!`));
+                    await this.pressEnterToContinue();
+                }
                 await this.askPrompts__handleRemoteHost();
                 break;
             case 'testConnection':
-                await this.remoteHost.testConnectionInteractive()
+                if (!this.remoteHost) {
+                    console.log(chalk.bold.red('No remote host selected!'));
+                } else {
+                    await this.remoteHost.testConnectionInteractive()
+                    await this.pressEnterToContinue();
+                }
                 await this.askPrompts__handleRemoteHost();
                 break;
             default:
@@ -114,6 +126,11 @@ export class RsyncCommand {
             console.log('Creating a new remote host...');
             this.remoteHost = null
         } else {
+            if (!this.remoteHost) {
+                console.log(chalk.bold.red('No remote host selected!'));
+                return;
+            }
+
             console.log(`Editing remote host ${this.remoteHost.name}...`);
         }
 
@@ -182,24 +199,69 @@ export class RsyncCommand {
             await this.askPrompts__selectRootPath();
         }
 
-        if (isCreation) {
-            console.log(`Remote remoteHost ${this.remoteHost.name} created!`);
-        } else {
-            console.log(`Remote remoteHost ${this.remoteHost.name} updated!`);
+        this.showRemoteHostDetails()
+
+        const askToSave = (await inquirer.prompt([
+            {
+                type: 'confirm',
+                name: 'askToSave',
+                message: `Do you want to save the remote host ${this.remoteHost.name}?`,
+                default: true,
+            },
+        ])).askToSave;
+
+        if (!askToSave) {
+            console.log(chalk.bold.red(`Remote remoteHost ${this.remoteHost.name} not saved!`));
+            return;
         }
 
         this.remoteHost.save()
+
+        if (isCreation) {
+            console.log(chalk.bold.green(`Remote remoteHost ${this.remoteHost.name} created!`));
+        } else {
+            console.log(chalk.bold.green(`Remote remoteHost ${this.remoteHost.name} updated!`));
+        }
     }
 
     showRemoteHostDetails() {
-        console.log(`Username: ${this.remoteHost.username}`);
-        console.log(`Host: ${this.remoteHost.host}`);
-        console.log(`Port: ${this.remoteHost.port}`);
-        console.log(`Description: ${this.remoteHost.description}`);
-        console.log(`Root path: ${this.remoteHost.root_path}`);
+        // const description = this.remoteHost.description
+        //     ? chalk.bold(this.remoteHost.description)
+        //     : chalk.dim('No description');
+        //
+        // console.log(`Username: ${chalk.bold(this.remoteHost.username)}`);
+        // console.log(`Host: ${chalk.bold(this.remoteHost.host)}`);
+        // console.log(`Port: ${chalk.bold(this.remoteHost.port)}`);
+        // console.log(`Description: ${description}`);
+        // console.log(`Root path: ${chalk.bold(this.remoteHost.root_path)}`);
+
+        console.log(this.remoteHost)
     }
 
     async askPrompts__selectRootPath() {
+        if (!this.remoteHost) {
+            console.log(chalk.bold.red('No remote host selected!'));
+            return;
+        }
 
+        this.remoteHost.root_path = (await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'root_path',
+                message: 'Please enter the root path:',
+                default: this.remoteHost.root_path,
+            },
+        ])).root_path;
+    }
+
+    async pressEnterToContinue() {
+        await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'continue',
+                message: 'Press Enter to continue...',
+            },
+        ]);
+        console.clear();
     }
 }

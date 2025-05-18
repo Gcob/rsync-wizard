@@ -91,4 +91,17 @@ export class DB {
             return null;
         }
     }
+
+    findBy(field, value) {
+        const items = this.getAllModels();
+        const foundModel = items.find(model => model[field] === value);
+
+        if (foundModel) {
+            const modelInstance = new this.className();
+            Object.assign(modelInstance, foundModel);
+            return modelInstance;
+        } else {
+            return null;
+        }
+    }
 }

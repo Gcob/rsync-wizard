@@ -2,7 +2,7 @@ import {DB} from "../features/database.js";
 import {spawn} from "child_process";
 
 export default class RemoteHost {
-    static db = new DB(RemoteHost, 'remote_hosts', 'name')
+    static db = new DB(RemoteHost, 'remote_hosts')
 
     /** @type {number} */
     id = -1;
@@ -52,7 +52,7 @@ export default class RemoteHost {
      * @returns {RemoteHost|null}
      */
     static find(name) {
-        return RemoteHost.db.find(name);
+        return RemoteHost.db.findBy('name', name);
     }
 
     save() {
@@ -62,7 +62,7 @@ export default class RemoteHost {
     }
 
     delete() {
-        RemoteHost.db.delete(this.name);
+        RemoteHost.db.delete(this.id);
     }
 
     /**
@@ -98,62 +98,56 @@ export default class RemoteHost {
     }
 
     async sshConnect() {
-        console.log(`Établissement d'une connexion SSH à ${this.username}@${this.host}:${this.port}...`);
+        console.log(`Starting a connection to ${this.username}@${this.host}:${this.port}...`);
 
-        // Mettre à jour le statut et l'horodatage
         this.status = 'initial';
         this.last_connection_at = new Date();
         this.save();
 
         return new Promise((resolve, reject) => {
             try {
-                // Préparation des arguments SSH
                 const sshArgs = [
                     '-p', `${this.port}`,
                     `${this.username}@${this.host}`
                 ];
 
-                // Si un chemin racine est spécifié, changer vers ce répertoire après connexion
                 if (this.root_path && this.root_path !== '/') {
                     sshArgs.push(`cd ${this.root_path} && bash --login`);
                 }
 
-                // Lancer le processus SSH avec redirection des entrées/sorties
                 const sshProcess = spawn('ssh', sshArgs, {
                     stdio: ['inherit', 'inherit', 'inherit'],
                     shell: true
                 });
 
-                // Gestion des événements de la connexion SSH
                 sshProcess.on('error', (error) => {
-                    console.error(`Erreur de connexion SSH: ${error.message}`);
+                    console.error(`Error during SSH connection: ${error.message}`);
                     this.status = 'error';
                     this.save();
                     reject(error);
                 });
 
                 sshProcess.on('close', (code) => {
-                    console.log(`Connexion SSH terminée avec le code: ${code}`);
+                    console.log(`Connection closed with code ${code}`);
 
-                    // Mettre à jour le statut en fonction du code de retour
                     if (code === 0) {
                         this.status = 'success';
                         this.save();
                         resolve({
                             success: true,
-                            message: 'Session SSH terminée avec succès'
+                            message: 'Successfully connected to the remote host'
                         });
                     } else {
                         this.status = 'error';
                         this.save();
                         resolve({
                             success: false,
-                            message: `Session SSH terminée avec le code d'erreur ${code}`
+                            message: `SSH connection failed with code ${code}`,
                         });
                     }
                 });
             } catch (error) {
-                console.error(`Exception lors de la connexion SSH: ${error.message}`);
+                console.error(`Error during SSH connection: ${error.message}`);
                 this.status = 'error';
                 this.save();
                 reject(error);
