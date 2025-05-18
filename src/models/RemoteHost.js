@@ -1,16 +1,44 @@
-import {spawn} from 'child_process';
-import ORMModel from "../orm/ORMModel";
+import {Model} from "../features/models.js";
 
-export default class RemoteSshHost extends ORMModel {
-    constructor(username, host, port = 22, name = '', description = '') {
-        super('sshHosts');
+export default class RemoteHost extends Model {
+    /** @type {Date} */
+    created_at = new Date();
+
+    /** @type {Date} */
+    updated_at = new Date();
+
+    /** @type {Date|null} */
+    last_connection_at = null;
+
+    /** @type {'initial'|'error'|'success'} */
+    status = 'initial';
+
+    /** @type {string} */
+    username = '';
+
+    /** @type {string} */
+    host = '';
+
+    /** @type {number} */
+    port = 22;
+
+    /** @type {string} */
+    name = '';
+
+    /** @type {string} */
+    description = '';
+
+    /** @type {string} */
+    root_path = '';
+
+    constructor(username, host, port = 22, name = '', description = '', root_path = '/') {
+        super('remote_hosts', 'name');
         this.username = username;
         this.host = host;
         this.port = port;
-        this.name = name || `${username}@${host}:${port}`;
+        this.name = name || `${username}@${host}`;
         this.description = description;
-        this.lastConnected = null;
-        this.status = 'unknown'; // unknown, connected, failed
+        this.root_path = root_path;
     }
 
     /**
@@ -123,7 +151,7 @@ export default class RemoteSshHost extends ORMModel {
      * @returns {Array}
      */
     static findAllHosts() {
-        return RemoteSshHost.findAll('sshHosts');
+        return RemoteHost.findAll('sshHosts');
     }
 
     /**
@@ -132,7 +160,7 @@ export default class RemoteSshHost extends ORMModel {
      * @returns {*|null}
      */
     static findByName(name) {
-        const hosts = RemoteSshHost.findWhere('sshHosts', host => host.name === name);
+        const hosts = RemoteHost.findWhere('sshHosts', host => host.name === name);
         return hosts.length > 0 ? hosts[0] : null;
     }
 }

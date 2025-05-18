@@ -1,5 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
-    "lowdb": "^7.0.1"
   }
 }
