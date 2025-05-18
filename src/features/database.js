@@ -76,12 +76,12 @@ export class DB {
 
     /**
      * Find a model by its primary key
-     * @param {string|number} primaryKeyValue
+     * @param {string|number} primaryKey
      * @returns {object|null}
      */
-    find(primaryKeyValue) {
+    find(primaryKey) {
         const items = this.getAllModels();
-        const foundModel = items.find(model => model[this.primary_key] === primaryKeyValue);
+        const foundModel = items.find(model => model[this.primary_key] === primaryKey);
 
         if (foundModel) {
             const modelInstance = new this.className();
