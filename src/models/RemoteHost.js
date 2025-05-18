@@ -1,6 +1,8 @@
-import {Model} from "../features/models.js";
+import {DB} from "../features/database.js";
 
-export default class RemoteHost extends Model {
+export default class RemoteHost {
+    static db = new DB(RemoteHost, 'remote_hosts', 'name')
+
     /** @type {Date} */
     created_at = new Date();
 
@@ -32,13 +34,30 @@ export default class RemoteHost extends Model {
     root_path = '';
 
     constructor(username, host, port = 22, name = '', description = '', root_path = '/') {
-        super('remote_hosts', 'name');
         this.username = username;
         this.host = host;
         this.port = port;
         this.name = name || `${username}@${host}`;
         this.description = description;
         this.root_path = root_path;
+    }
+
+
+
+    /**
+     * @returns {RemoteHost|null}
+     */
+    static find(name) {
+        return RemoteHost.db.find(name);
+    }
+
+    save() {
+        this.updated_at = new Date();
+        RemoteHost.db.save(this);
+    }
+
+    delete() {
+        RemoteHost.db.delete(this.name);
     }
 
     /**
