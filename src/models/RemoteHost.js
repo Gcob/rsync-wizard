@@ -4,6 +4,8 @@ import chalk from "chalk";
 import {exec} from "child_process";
 import {promisify} from "util";
 import {pressEnterToContinue} from "../features/commons.js";
+import path from "path";
+import inquirer from "inquirer";
 
 const execPromise = promisify(exec);
 
@@ -22,6 +24,7 @@ export default class RemoteHost {
         'known_directories',
         'private_key_path',
         'use_key_auth',
+        'os',
     ])
 
     /** @type {number} */
@@ -62,6 +65,9 @@ export default class RemoteHost {
 
     /** @type {string[]} */
     known_directories = [];
+
+    /** @type {string} */
+    os = 'ubuntu';
 
     /** @type {string} */
     currentDirectory = '/';
@@ -179,7 +185,7 @@ export default class RemoteHost {
      * @param {boolean} options.captureOutput - Whether to capture output (true) or display it directly (false)
      * @returns {Promise<{success: boolean, stdout?: string, stderr?: string, code: number}>}
      */
-    async executeCommand(command, options = { captureOutput: false }) {
+    async executeCommand(command, options = {captureOutput: false}) {
         await this.loadSSHKeyIfNeeded();
         console.log(chalk.blue(`Executing command on ${this.username}@${this.host}:${this.port}: ${command}`));
 
@@ -245,5 +251,23 @@ export default class RemoteHost {
                 reject(error);
             });
         });
+    }
+
+    /**
+     * Browse and select a directory on the remote host
+     * @param {Object} options - Options
+     * @param {number} options.maxDepth - Max recursion depth for directory scan
+     * @param {string} options.startPath - Starting path for browsing (defaults to current directory)
+     * @returns {Promise<string>} - Selected directory path
+     */
+    async browseDirectories(options = {maxDepth: 3, startPath: null}) {
+        const startPath = (options.startPath || this.currentDirectory).replace(/\/+$/, '');
+        // const command = `find ${startPath} -maxdepth ${options.maxDepth ?? 3} -type d | jq -R . | jq -s .`
+        const command = `pwd`
+        const results = await this.executeCommand(command, {captureOutput: true});
+
+        console.log(results.stdout);
+
+        await pressEnterToContinue();
     }
 }

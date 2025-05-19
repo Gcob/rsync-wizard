@@ -53,9 +53,11 @@ export class RsyncCommand {
         switch (choice) {
             case 'pull':
                 this.isPush = false;
+                this.distantDirectory = await this.askPrompts__askForDistantDirectory();
                 break;
             case 'push':
                 this.isPush = true;
+                this.distantDirectory = await this.askPrompts__askForDistantDirectory();
                 break;
             case 'details':
                 this.showRemoteHostDetails();
@@ -290,4 +292,35 @@ export class RsyncCommand {
     }
 
 
+    async askPrompts__askForDistantDirectory() {
+        const choices = []
+
+        if (this.remoteHost.known_directories) {
+            for (const directory of this.remoteHost.known_directories) {
+                choices.push({name: directory, value: directory});
+            }
+        }
+
+        choices.push({name: 'Add a new directory', value: 'new'});
+
+        this.remoteHost.currentDirectory = (await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'directory',
+                message: 'Please select a directory:',
+                choices,
+            },
+        ])).directory;
+
+        if (this.remoteHost.currentDirectory === 'new') {
+            const newDirectory = await this.remoteHost.browseDirectories()
+            this.remoteHost.known_directories.push(newDirectory);
+            this.remoteHost.currentDirectory = newDirectory;
+            this.remoteHost.save();
+            console.log(chalk.bold.green(`Directory ${newDirectory} added!`));
+        }
+
+        console.log(`Selected directory: ${this.remoteHost.currentDirectory}`);
+        await pressEnterToContinue();
+    }
 }
