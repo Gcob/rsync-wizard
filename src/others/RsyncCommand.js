@@ -2,6 +2,7 @@ import inquirer from "inquirer";
 import RemoteHost from "../models/RemoteHost.js";
 import chalk from "chalk";
 import fs from "fs";
+import {pressEnterToContinue} from "../features/commons.js";
 
 export class RsyncCommand {
     /** @type {boolean} */
@@ -22,7 +23,6 @@ export class RsyncCommand {
         }
 
         console.log(chalk.bold(`Remote Host`) + ` : ${this.remoteHost.name}`);
-        console.log(chalk.bold(`Status`) + ` : ${this.remoteHost.getStatus()}`);
 
         if (this.remoteHost.description) {
             console.log(chalk.bold(`Description`) + ` : ${this.remoteHost.description}`);
@@ -32,17 +32,13 @@ export class RsyncCommand {
             {name: `Pull`, value: 'pull'},
             {name: `Push`, value: 'push'},
             new inquirer.Separator(),
-            {name: `Start SSH`, value: 'startConnection'},
+            {name: `Execute SSH command`, value: 'executeCommand'},
             {name: `Test SSH`, value: 'testConnection'},
             new inquirer.Separator(),
             {name: `See details`, value: 'details'},
             {name: `Edit details`, value: 'edit'},
             {name: chalk.red(`Delete`), value: 'delete'},
         ]
-
-        if (this.remoteHost.status === 'connected') {
-            choices[3] = {name: `Stop SSH`, value: 'stopConnection'};
-        }
 
         const choice = (await inquirer.prompt([
             {
@@ -63,7 +59,7 @@ export class RsyncCommand {
                 break;
             case 'details':
                 this.showRemoteHostDetails();
-                await this.pressEnterToContinue();
+                await pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
                 break;
             case 'edit':
@@ -81,25 +77,31 @@ export class RsyncCommand {
                     await this.remoteHost.delete();
                     console.log(`Remote remoteHost ${this.remoteHost.name} deleted!`);
                     this.showRemoteHostDetails();
-                    await this.pressEnterToContinue();
+                    await pressEnterToContinue();
                     return;
                 } else {
                     await this.askPrompts__handleRemoteHost();
                 }
 
                 break;
-            case 'startConnection':
-                await this.remoteHost.connect()
-                await this.pressEnterToContinue();
-                await this.askPrompts__handleRemoteHost();
-                break;
-            case 'stopConnection':
-                await this.remoteHost.disconnect()
-                await this.pressEnterToContinue();
+            case 'executeCommand':
+                console.log(chalk.bold(`Directory`) + ` : ${this.remoteHost.currentDirectory}`);
+
+                const command = (await inquirer.prompt([
+                    {
+                        type: 'input',
+                        name: 'command',
+                        message: 'Please enter the command to execute:',
+                        default: 'pwd && ls -la',
+                    },
+                ])).command;
+
+                await this.remoteHost.executeCommand(command);
+                await pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
             case 'testConnection':
                 await this.remoteHost.testConnectionInteractive()
-                await this.pressEnterToContinue();
+                await pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
                 break;
             default:
@@ -287,13 +289,5 @@ export class RsyncCommand {
         ])).root_path;
     }
 
-    async pressEnterToContinue() {
-        await inquirer.prompt([{
-            type: 'input',
-            name: 'continue',
-            message: 'Press Enter to continue...',
-        }]);
 
-        console.clear();
-    }
 }
