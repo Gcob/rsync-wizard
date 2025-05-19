@@ -554,4 +554,55 @@ export default class RemoteHost {
 
         return currentDir;
     }
+
+    /**
+     * Start an interactive SSH session with the remote host
+     * @returns {Promise<void>}
+     */
+    async startSSHSession() {
+        console.log(chalk.blue(`Starting SSH session to ${this.username}@${this.host}:${this.port}...`));
+        await this.loadSSHKeyIfNeeded();
+
+        const sshArgs = [
+            '-p', `${this.port}`
+        ];
+
+        if (this.use_key_auth && this.private_key_path) {
+            sshArgs.push('-i', this.private_key_path);
+        }
+
+        sshArgs.push(`${this.username}@${this.host}`);
+
+        if (this.currentDirectory) {
+            sshArgs.push(`-t`, `cd "${this.currentDirectory}" && bash -l`);
+        }
+
+        console.log(chalk.dim(`Running: ssh ${sshArgs.join(' ')}`));
+
+        return new Promise((resolve) => {
+            const sshProcess = spawn('ssh', sshArgs, {
+                stdio: 'inherit'
+            });
+
+            sshProcess.on('close', (code) => {
+                this.last_connection_at = new Date();
+                this.save();
+
+                if (code === 0) {
+                    console.log(chalk.green('SSH session closed successfully'));
+                } else {
+                    console.log(chalk.yellow(`SSH session closed with code ${code}`));
+                }
+
+                resolve();
+            });
+
+            sshProcess.on('error', (error) => {
+                console.error(chalk.red(`SSH Error: ${error.message}`));
+                this.last_connection_at = new Date();
+                this.save();
+                resolve();
+            });
+        });
+    }
 }

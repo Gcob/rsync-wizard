@@ -64,6 +64,7 @@ export class RsyncCommand {
             new inquirer.Separator(),
             {name: `Execute SSH command`, value: 'executeCommand'},
             {name: `Test SSH`, value: 'testConnection'},
+            {name: `Start SSH`, value: 'startSSH'},
             new inquirer.Separator(),
             {name: `See details`, value: 'details'},
             {name: `Edit details`, value: 'edit'},
@@ -129,6 +130,12 @@ export class RsyncCommand {
                 await this.remoteHost.executeCommand(command);
                 await pressEnterToContinue();
                 await this.buildAndExecute__handleRemoteHost();
+                break;
+            case 'startSSH':
+                await this.remoteHost.startSSHSession();
+                await pressEnterToContinue();
+                await this.buildAndExecute__handleRemoteHost();
+                break;
             case 'testConnection':
                 await this.remoteHost.testConnectionInteractive()
                 await pressEnterToContinue();
@@ -138,6 +145,8 @@ export class RsyncCommand {
                 throw new Error('Option not found');
         }
     }
+
+
 
     async buildAndExecute__getRemoteHost() {
         const remoteHosts = await RemoteHost.db.getAllModels();
@@ -456,23 +465,23 @@ export class RsyncCommand {
 
         if (readyToExecute) {
             console.log(chalk.bold.blue(`Executing command...`));
-            
+
             return new Promise((resolve) => {
-                const childProcess = child_process.spawn(this.toString(), { shell: true });
-                
+                const childProcess = child_process.spawn(this.toString(), {shell: true});
+
                 childProcess.stdout.on('data', (data) => {
                     process.stdout.write(data.toString());
                 });
-                
+
                 childProcess.stderr.on('data', (data) => {
                     process.stderr.write(chalk.red(data.toString()));
                 });
-                
+
                 childProcess.on('error', (error) => {
                     console.error(chalk.bold.red(`Error: ${error.message}`));
                     resolve();
                 });
-                
+
                 childProcess.on('close', async (code) => {
                     if (code === 0) {
                         console.log(chalk.bold.green(`\nCommand completed successfully!`));
@@ -484,7 +493,7 @@ export class RsyncCommand {
                 });
             });
         }
-        
+
         await pressEnterToContinue();
     }
 }
