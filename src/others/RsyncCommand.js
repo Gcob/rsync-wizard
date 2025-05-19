@@ -87,14 +87,14 @@ export class RsyncCommand {
 
                 break;
             case 'executeCommand':
-                console.log(chalk.bold(`Directory`) + ` : ${this.remoteHost.currentDirectory}`);
+                console.log(chalk.bold(`Directory`) + ` : ${this.remoteHost.getCurrentDirectory()}`);
 
                 const command = (await inquirer.prompt([
                     {
                         type: 'input',
                         name: 'command',
                         message: 'Please enter the command to execute:',
-                        default: 'pwd && ls -la',
+                        default: 'pwd',
                     },
                 ])).command;
 
@@ -303,7 +303,7 @@ export class RsyncCommand {
 
         choices.push({name: 'Add a new directory', value: 'new'});
 
-        this.remoteHost.currentDirectory = (await inquirer.prompt([
+        const choice = (await inquirer.prompt([
             {
                 type: 'list',
                 name: 'directory',
@@ -312,12 +312,18 @@ export class RsyncCommand {
             },
         ])).directory;
 
-        if (this.remoteHost.currentDirectory === 'new') {
-            const newDirectory = await this.remoteHost.browseDirectories()
-            this.remoteHost.known_directories.push(newDirectory);
+        if (choice === 'new') {
+            const newDirectory = await this.remoteHost.browseDirectories(this.remoteHost.root_path)
+            const index = this.remoteHost.known_directories.indexOf(newDirectory);
+            if (index === -1) {
+                this.remoteHost.known_directories.push(newDirectory);
+                this.remoteHost.save();
+            }
             this.remoteHost.currentDirectory = newDirectory;
-            this.remoteHost.save();
             console.log(chalk.bold.green(`Directory ${newDirectory} added!`));
+        } else {
+            this.remoteHost.currentDirectory = choice;
+            console.log(chalk.bold.green(`Directory ${choice} selected!`));
         }
 
         console.log(`Selected directory: ${this.remoteHost.currentDirectory}`);
