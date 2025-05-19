@@ -1,6 +1,7 @@
 import inquirer from "inquirer";
 import RemoteHost from "../models/RemoteHost.js";
 import chalk from "chalk";
+import fs from "fs";
 
 export class RsyncCommand {
     /** @type {boolean} */
@@ -15,26 +16,43 @@ export class RsyncCommand {
     }
 
     async askPrompts__handleRemoteHost() {
-        const remoteName = this.remoteHost?.name || 'remote host';
+        if (!this.remoteHost) {
+            console.log(chalk.bold.red('No remote host selected!'));
+            return;
+        }
+
+        console.log(chalk.bold(`Remote Host`) + ` : ${this.remoteHost.name}`);
+        console.log(chalk.bold(`Status`) + ` : ${this.remoteHost.getStatus()}`);
+
+        if (this.remoteHost.description) {
+            console.log(chalk.bold(`Description`) + ` : ${this.remoteHost.description}`);
+        }
+
+        const choices = [
+            {name: `Pull`, value: 'pull'},
+            {name: `Push`, value: 'push'},
+            new inquirer.Separator(),
+            {name: `Start SSH`, value: 'startConnection'},
+            {name: `Test SSH`, value: 'testConnection'},
+            new inquirer.Separator(),
+            {name: `See details`, value: 'details'},
+            {name: `Edit details`, value: 'edit'},
+            {name: chalk.red(`Delete`), value: 'delete'},
+        ]
+
+        if (this.remoteHost.status === 'connected') {
+            choices[3] = {name: `Stop SSH`, value: 'stopConnection'};
+        }
 
         const choice = (await inquirer.prompt([
             {
                 type: 'rawlist',
                 name: 'choice',
                 message: 'What do you want to do?',
-                choices: [
-                    {name: `Pull from remote host`, value: 'pull'},
-                    {name: `Push to remote host`, value: 'push'},
-                    new inquirer.Separator(),
-                    {name: `Start remote host connection`, value: 'startConnection'},
-                    {name: `Test connection to remote host`, value: 'testConnection'},
-                    new inquirer.Separator(),
-                    {name: `See remote host details`, value: 'details'},
-                    {name: `Edit remote host details`, value: 'edit'},
-                    {name: `Delete remote host`, value: 'delete'},
-                ],
+                choices,
             },
         ])).choice;
+
 
         switch (choice) {
             case 'pull':
@@ -52,14 +70,12 @@ export class RsyncCommand {
                 await this.askPrompts__editRemoteHost();
                 break;
             case 'delete':
-                const confirmDelete = (await inquirer.prompt([
-                    {
-                        type: 'confirm',
-                        name: 'confirmDelete',
-                        message: `Are you sure you want to delete ${remoteName}?`,
-                        default: false,
-                    },
-                ])).confirmDelete;
+                const confirmDelete = (await inquirer.prompt([{
+                    type: 'confirm',
+                    name: 'confirmDelete',
+                    message: `Are you sure you want to delete ${this.remoteHost.name}?`,
+                    default: false,
+                }])).confirmDelete;
 
                 if (confirmDelete) {
                     await this.remoteHost.delete();
@@ -73,22 +89,17 @@ export class RsyncCommand {
 
                 break;
             case 'startConnection':
-                if (!this.remoteHost) {
-                    console.log(chalk.bold.red('No remote host selected!'));
-                } else {
-                    await this.remoteHost.sshConnect()
-                    console.log(chalk.bold(`Connection to ${remoteName} finished!`));
-                    await this.pressEnterToContinue();
-                }
+                await this.remoteHost.connect()
+                await this.pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
                 break;
+            case 'stopConnection':
+                await this.remoteHost.disconnect()
+                await this.pressEnterToContinue();
+                await this.askPrompts__handleRemoteHost();
             case 'testConnection':
-                if (!this.remoteHost) {
-                    console.log(chalk.bold.red('No remote host selected!'));
-                } else {
-                    await this.remoteHost.testConnectionInteractive()
-                    await this.pressEnterToContinue();
-                }
+                await this.remoteHost.testConnectionInteractive()
+                await this.pressEnterToContinue();
                 await this.askPrompts__handleRemoteHost();
                 break;
             default:
@@ -159,6 +170,26 @@ export class RsyncCommand {
             this.remoteHost.host = host;
         }
 
+        const sshDir = process.env.HOME + '/.ssh';
+        const files = fs.readdirSync(sshDir);
+        const privateKeyFiles = files.filter(file => !file.endsWith('.pub'));
+        const privateKeyChoices = privateKeyFiles.map(file => ({
+            name: file,
+            value: sshDir + '/' + file,
+        }));
+
+        console.log(chalk.bold.blue('Available private keys:'));
+
+        this.remoteHost.private_key_path = (await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'private_key_path',
+                message: 'Please enter the private key path:',
+                default: this.remoteHost.private_key_path,
+                choices: privateKeyChoices,
+            },
+        ])).private_key_path;
+
         this.remoteHost.port = (await inquirer.prompt([
             {
                 type: 'input',
@@ -199,16 +230,18 @@ export class RsyncCommand {
             await this.askPrompts__selectRootPath();
         }
 
-        this.showRemoteHostDetails()
+        console.log(chalk.bold.blue(`Remote remoteHost ${this.remoteHost.name} is ready to be saved!`));
 
         const askToSave = (await inquirer.prompt([
             {
                 type: 'confirm',
                 name: 'askToSave',
-                message: `Do you want to save the remote host ${this.remoteHost.name}?`,
+                message: `Do you want to save ${this.remoteHost.name}?`,
                 default: true,
             },
         ])).askToSave;
+
+        console.clear();
 
         if (!askToSave) {
             console.log(chalk.bold.red(`Remote remoteHost ${this.remoteHost.name} not saved!`));
@@ -255,13 +288,12 @@ export class RsyncCommand {
     }
 
     async pressEnterToContinue() {
-        await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'continue',
-                message: 'Press Enter to continue...',
-            },
-        ]);
+        await inquirer.prompt([{
+            type: 'input',
+            name: 'continue',
+            message: 'Press Enter to continue...',
+        }]);
+
         console.clear();
     }
 }

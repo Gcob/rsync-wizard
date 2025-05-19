@@ -5,10 +5,19 @@ import fs from "fs";
  * Database class for managing JSON-based data storage
  */
 export class DB {
-    constructor(className, table_name, primary_key = 'id') {
+
+    /**
+     *
+     * @param className {string}
+     * @param table_name {string}
+     * @param primary_key {string}
+     * @param columns {string[]|null}
+     */
+    constructor(className, table_name, primary_key = 'id', columns = null) {
         this.className = className
         this.table_name = table_name;
         this.primary_key = primary_key;
+        this.columns = columns;
 
         this.initJsonFile();
     }
@@ -34,18 +43,35 @@ export class DB {
     save(model) {
         const items = this.getAllModels();
         const existingModelIndex = items.findIndex(item => item[this.primary_key] === model[this.primary_key]);
+        const data = {...model};
 
-        if (existingModelIndex !== -1) {
-            items[existingModelIndex] = model;
-        } else {
-            items.push(model);
+        if (this.columns) {
+            for (const key in data) {
+                if (!this.columns.includes(key)) {
+                    delete data[key];
+                }
+            }
         }
 
+        if (existingModelIndex !== -1) {
+            items[existingModelIndex] = data;
+        } else {
+            items.push(data);
+        }
+
+        items.sort((a, b) => {
+            if (a[this.primary_key] < b[this.primary_key]) {
+                return -1;
+            }
+            if (a[this.primary_key] > b[this.primary_key]) {
+                return 1;
+            }
+            return 0;
+        })
+
         const tableData = {
-            meta: {
-                table_name: this.table_name,
-                primary_key: this.primary_key,
-            },
+            table_name: this.table_name,
+            primary_key: this.primary_key,
             items: items,
         }
 
