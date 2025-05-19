@@ -1,4 +1,8 @@
 import {RsyncCommand} from "./src/others/RsyncCommand.js";
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 try {
     while (true) {

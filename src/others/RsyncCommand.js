@@ -383,6 +383,7 @@ export class RsyncCommand {
         ])).localDirectory;
 
         da.localPath = this.localDirectory;
+        this.remoteHost.save();
     }
 
     async buildAndExecute__askForOptions() {
@@ -455,19 +456,35 @@ export class RsyncCommand {
 
         if (readyToExecute) {
             console.log(chalk.bold.blue(`Executing command...`));
-            await child_process.exec(this.toString(), (error, stdout, stderr) => {
-                if (error) {
+            
+            return new Promise((resolve) => {
+                const childProcess = child_process.spawn(this.toString(), { shell: true });
+                
+                childProcess.stdout.on('data', (data) => {
+                    process.stdout.write(data.toString());
+                });
+                
+                childProcess.stderr.on('data', (data) => {
+                    process.stderr.write(chalk.red(data.toString()));
+                });
+                
+                childProcess.on('error', (error) => {
                     console.error(chalk.bold.red(`Error: ${error.message}`));
-                    return;
-                }
-                if (stderr) {
-                    console.error(chalk.bold.red(`stderr: ${stderr}`));
-                    return;
-                }
-                console.log(chalk.bold.green(`stdout: ${stdout}`));
+                    resolve();
+                });
+                
+                childProcess.on('close', async (code) => {
+                    if (code === 0) {
+                        console.log(chalk.bold.green(`\nCommand completed successfully!`));
+                    } else {
+                        console.log(chalk.bold.red(`\nCommand failed with exit code ${code}`));
+                    }
+                    await pressEnterToContinue();
+                    resolve();
+                });
             });
         }
-
-        await pressEnterToContinue()
+        
+        await pressEnterToContinue();
     }
 }

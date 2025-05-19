@@ -2,6 +2,7 @@
   "type": "module",
   "dependencies": {
     "chalk": "^5.4.1",
+    "dotenv": "^16.5.0",
     "inquirer": "^12.6.1"
   }
 }
