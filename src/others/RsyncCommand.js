@@ -3,6 +3,8 @@ import RemoteHost from "../models/RemoteHost.js";
 import chalk from "chalk";
 import fs from "fs";
 import {pressEnterToContinue} from "../features/commons.js";
+import DirectoryAssociation from "../models/DirectoryAssociation.js";
+import * as child_process from "node:child_process";
 
 export class RsyncCommand {
     /** @type {boolean} */
@@ -11,12 +13,40 @@ export class RsyncCommand {
     /** @type {RemoteHost} */
     remoteHost = null;
 
-    async askPrompts() {
-        await this.askPrompts__getRemoteHost();
-        await this.askPrompts__handleRemoteHost();
+    /** @type {string} */
+    distantDirectory = '';
+
+    /** @type {string} */
+    localDirectory = '';
+
+    /** @type {boolean} */
+    verbose = false;
+
+    /** @type {boolean} */
+    archive = true;
+
+    /** @type {boolean} */
+    compress = true;
+
+    /** @type {boolean} */
+    delete = false;
+
+    /** @type {boolean} */
+    dryRun = false;
+
+    /** @type {boolean} */
+    progress = true;
+
+    async buildAndExecute() {
+        await this.buildAndExecute__getRemoteHost();
+        await this.buildAndExecute__handleRemoteHost();
+        await this.buildAndExecute__askForDistantDirectory();
+        await this.buildAndExecute__askForLocalDirectory();
+        await this.buildAndExecute__askForOptions();
+        await this.buildAndExecute__askToExecute();
     }
 
-    async askPrompts__handleRemoteHost() {
+    async buildAndExecute__handleRemoteHost() {
         if (!this.remoteHost) {
             console.log(chalk.bold.red('No remote host selected!'));
             return;
@@ -53,19 +83,17 @@ export class RsyncCommand {
         switch (choice) {
             case 'pull':
                 this.isPush = false;
-                this.distantDirectory = await this.askPrompts__askForDistantDirectory();
                 break;
             case 'push':
                 this.isPush = true;
-                this.distantDirectory = await this.askPrompts__askForDistantDirectory();
                 break;
             case 'details':
                 this.showRemoteHostDetails();
                 await pressEnterToContinue();
-                await this.askPrompts__handleRemoteHost();
+                await this.buildAndExecute__handleRemoteHost();
                 break;
             case 'edit':
-                await this.askPrompts__editRemoteHost();
+                await this.buildAndExecute__editRemoteHost();
                 break;
             case 'delete':
                 const confirmDelete = (await inquirer.prompt([{
@@ -82,7 +110,7 @@ export class RsyncCommand {
                     await pressEnterToContinue();
                     return;
                 } else {
-                    await this.askPrompts__handleRemoteHost();
+                    await this.buildAndExecute__handleRemoteHost();
                 }
 
                 break;
@@ -100,18 +128,18 @@ export class RsyncCommand {
 
                 await this.remoteHost.executeCommand(command);
                 await pressEnterToContinue();
-                await this.askPrompts__handleRemoteHost();
+                await this.buildAndExecute__handleRemoteHost();
             case 'testConnection':
                 await this.remoteHost.testConnectionInteractive()
                 await pressEnterToContinue();
-                await this.askPrompts__handleRemoteHost();
+                await this.buildAndExecute__handleRemoteHost();
                 break;
             default:
                 throw new Error('Option not found');
         }
     }
 
-    async askPrompts__getRemoteHost() {
+    async buildAndExecute__getRemoteHost() {
         const remoteHosts = await RemoteHost.db.getAllModels();
         const choices = remoteHosts.map(host => ({
             name: host.name,
@@ -130,13 +158,13 @@ export class RsyncCommand {
         ])).choice;
 
         if (choice === 'new') {
-            await this.askPrompts__editRemoteHost(true);
+            await this.buildAndExecute__editRemoteHost(true);
         } else {
             this.remoteHost = RemoteHost.find(choice);
         }
     }
 
-    async askPrompts__editRemoteHost(isCreation) {
+    async buildAndExecute__editRemoteHost(isCreation) {
         if (isCreation) {
             console.log('Creating a new remote host...');
             this.remoteHost = null
@@ -231,8 +259,18 @@ export class RsyncCommand {
         ])).wantToSelectRootPath;
 
         if (wantToSelectRootPath) {
-            await this.askPrompts__selectRootPath();
+            await this.buildAndExecute__selectRootPath();
         }
+
+        // base_local_path
+        this.remoteHost.base_local_path = (await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'base_local_path',
+                message: 'Please enter the base local path:',
+                default: this.remoteHost.base_local_path,
+            }
+        ])).base_local_path;
 
         console.log(chalk.bold.blue(`Remote remoteHost ${this.remoteHost.name} is ready to be saved!`));
 
@@ -275,7 +313,7 @@ export class RsyncCommand {
         console.log(this.remoteHost)
     }
 
-    async askPrompts__selectRootPath() {
+    async buildAndExecute__selectRootPath() {
         if (!this.remoteHost) {
             console.log(chalk.bold.red('No remote host selected!'));
             return;
@@ -292,11 +330,11 @@ export class RsyncCommand {
     }
 
 
-    async askPrompts__askForDistantDirectory() {
+    async buildAndExecute__askForDistantDirectory() {
         const choices = []
 
-        if (this.remoteHost.known_directories) {
-            for (const directory of this.remoteHost.known_directories) {
+        if (this.remoteHost.getDistantDirectories().length) {
+            for (const directory of this.remoteHost.getDistantDirectories()) {
                 choices.push({name: directory, value: directory});
             }
         }
@@ -314,9 +352,9 @@ export class RsyncCommand {
 
         if (choice === 'new') {
             const newDirectory = await this.remoteHost.browseDirectories(this.remoteHost.root_path)
-            const index = this.remoteHost.known_directories.indexOf(newDirectory);
+            const index = this.remoteHost.getDistantDirectories().indexOf(newDirectory);
             if (index === -1) {
-                this.remoteHost.known_directories.push(newDirectory);
+                this.remoteHost.directories_associations.push(new DirectoryAssociation(newDirectory));
                 this.remoteHost.save();
             }
             this.remoteHost.currentDirectory = newDirectory;
@@ -325,8 +363,111 @@ export class RsyncCommand {
             this.remoteHost.currentDirectory = choice;
             console.log(chalk.bold.green(`Directory ${choice} selected!`));
         }
+    }
 
-        console.log(`Selected directory: ${this.remoteHost.currentDirectory}`);
-        await pressEnterToContinue();
+    async buildAndExecute__askForLocalDirectory() {
+        /** @type {DirectoryAssociation|null} */
+        const da = this.remoteHost.directories_associations.find((da) => {
+            return da.distantPath === this.remoteHost.currentDirectory
+        });
+
+        const currentProcessDirectory = da?.localPath || this.remoteHost.base_local_path;
+
+        this.localDirectory = (await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'localDirectory',
+                message: 'Please enter the local directory:',
+                default: currentProcessDirectory,
+            },
+        ])).localDirectory;
+
+        da.localPath = this.localDirectory;
+    }
+
+    async buildAndExecute__askForOptions() {
+        const options = (await inquirer.prompt([
+            {
+                type: 'checkbox',
+                name: 'options',
+                message: 'Please select the options:',
+                choices: [
+                    {name: 'Verbose', value: 'verbose', checked: this.verbose},
+                    {name: 'Archive', value: 'archive', checked: this.archive},
+                    {name: 'Compress', value: 'compress', checked: this.compress},
+                    {name: 'Delete', value: 'delete', checked: this.delete},
+                    {name: 'Dry Run', value: 'dryRun', checked: this.dryRun},
+                    {name: 'Progress', value: 'progress', checked: this.progress},
+                ],
+            },
+        ])).options;
+
+        this.verbose = options.includes('verbose');
+        this.archive = options.includes('archive');
+        this.compress = options.includes('compress');
+        this.delete = options.includes('delete');
+        this.dryRun = options.includes('dryRun');
+        this.progress = options.includes('progress');
+
+        console.log(chalk.bold.green(`Options selected!`));
+
+    }
+
+    toString() {
+        const optionsStr = ''
+            + (this.verbose ? ' -v' : '')
+            + (this.archive ? ' -a' : '')
+            + (this.compress ? ' -z' : '')
+            + (this.delete ? ' --delete' : '')
+            + (this.dryRun ? ' --dry-run' : '')
+            + (this.progress ? ' --progress' : '');
+
+        const sshOptions = ' -e "ssh -i ' + this.remoteHost.private_key_path + ' -p ' + this.remoteHost.port + '"';
+
+        const distantDirectory = this.remoteHost.username + '@' + this.remoteHost.host + ':' + this.remoteHost.currentDirectory;
+
+        const src = this.isPush ? this.localDirectory : distantDirectory;
+        const dest = this.isPush ? distantDirectory : this.localDirectory;
+
+        const rtrim = (str) => str.replace(/\/+$/, '');
+
+        return `rsync ${optionsStr} ${sshOptions} ${rtrim(src)}/ ${rtrim(dest)}/`;
+    }
+
+    async buildAndExecute__askToExecute() {
+        console.log(chalk.bold.blue(`Remote remoteHost ${this.remoteHost.name} is ready to be used!`));
+        console.log(chalk.bold(this.toString()));
+
+        if (this.isPush) {
+            console.log(chalk.bold.yellow(`This command will overwrite DISTANT files in ${this.remoteHost.username}@${this.remoteHost.host}:${this.remoteHost.currentDirectory}`));
+        } else {
+            console.log(chalk.bold.yellow(`This command will overwrite LOCAL in ${this.localDirectory}`));
+        }
+
+        const readyToExecute = (await inquirer.prompt([
+            {
+                type: 'confirm',
+                name: 'readyToExecute',
+                message: `Do you want to execute the command?`,
+                default: true,
+            },
+        ])).readyToExecute;
+
+        if (readyToExecute) {
+            console.log(chalk.bold.blue(`Executing command...`));
+            await child_process.exec(this.toString(), (error, stdout, stderr) => {
+                if (error) {
+                    console.error(chalk.bold.red(`Error: ${error.message}`));
+                    return;
+                }
+                if (stderr) {
+                    console.error(chalk.bold.red(`stderr: ${stderr}`));
+                    return;
+                }
+                console.log(chalk.bold.green(`stdout: ${stdout}`));
+            });
+        }
+
+        await pressEnterToContinue()
     }
 }

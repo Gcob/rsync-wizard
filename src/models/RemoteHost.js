@@ -21,10 +21,11 @@ export default class RemoteHost {
         'name',
         'description',
         'root_path',
-        'known_directories',
         'private_key_path',
         'use_key_auth',
         'os',
+        'base_local_path',
+        'directories_associations'
     ])
 
     /** @type {number} */
@@ -63,15 +64,17 @@ export default class RemoteHost {
     /** @type {string} */
     root_path = '';
 
-    /** @type {string[]} */
-    known_directories = [];
+    /** @type {DirectoryAssociation[]} */
+    directories_associations = [];
+
+    /** @type {string|null} */
+    base_local_path = null;
 
     /** @type {string} */
     os = 'ubuntu';
 
     /** @type {string|null} */
     currentDirectory = null;
-
 
     /**
      * @param {string} username
@@ -92,6 +95,7 @@ export default class RemoteHost {
         this.root_path = root_path;
         this.private_key_path = private_key_path;
         this.use_key_auth = use_key_auth;
+        this.base_local_path = path.join(process.env.DEFAULT_BASE_LOCAL_PATH || process.env.HOME || process.env.USERPROFILE || '');
         this.id = RemoteHost.db.getAllModels().sort((a, b) => b.id - a.id)[0]?.id + 1 || 1;
     }
 
@@ -116,6 +120,14 @@ export default class RemoteHost {
 
     getCurrentDirectory() {
         return this.currentDirectory || this.root_path;
+    }
+
+    getDistantDirectories() {
+        return this.directories_associations.map(assoc => assoc.distantPath);
+    }
+
+    getLocalDirectories() {
+        return this.directories_associations.map(assoc => assoc.localPath);
     }
 
     /**

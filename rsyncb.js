@@ -1,8 +1,10 @@
 import {RsyncCommand} from "./src/others/RsyncCommand.js";
 
 try {
-    const rsyncCommand = new RsyncCommand();
-    await rsyncCommand.askPrompts();
+    while (true) {
+        const rsyncCommand = new RsyncCommand();
+        await rsyncCommand.buildAndExecute();
+    }
 } catch (error) {
     if (error?.message !== 'exit' && error?.name !== 'ExitPromptError') {
         console.error(error);
