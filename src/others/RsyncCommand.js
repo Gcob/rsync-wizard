@@ -162,6 +162,8 @@ export class RsyncCommand {
                 type: 'list',
                 name: 'choice',
                 message: 'Please select a remote remoteHost:',
+                loop: false,
+                pageSize: 10,
                 choices,
             },
         ])).choice;

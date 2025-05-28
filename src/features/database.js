@@ -34,7 +34,13 @@ export class DB {
 
     getAllModels() {
         const data = fs.readFileSync(this.getJsonFilePath(), 'utf-8');
-        return JSON.parse(data).items || [];
+        const items = JSON.parse(data).items || [];
+
+        if (items.length > 0 && items[0].hasOwnProperty('updated_at')) {
+            items.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+        }
+
+        return items;
     }
 
     /**
